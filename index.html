@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Kiwi Chat</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 10px;
+    }
+    #chat {
+      width: 100%;
+      height: 300px;
+      border: 1px solid #000;
+      overflow-y: auto;
+      padding: 5px;
+      margin-bottom: 10px;
+    }
+    input, button {
+      padding: 5px;
+      margin: 5px 0;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .hidden {
+      display: none;
+    }
+    .popup {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .popup > div {
+      width: 300px;
+    }
+  </style>
+</head>
+<body>
+  <div id="loginPopup" class="popup">
+    <div>
+      <p>Login</p>
+      <input id="usernameInput" placeholder="Username" />
+      <input id="passwordInput" type="password" placeholder="Password" />
+      <button id="loginBtn">Login</button>
+      <button onclick="showRegister()">Register</button>
+    </div>
+  </div>
+
+  <div id="registerPopup" class="popup hidden">
+    <div>
+      <p>Register</p>
+      <input id="newUsername" placeholder="Username" />
+      <input id="newPassword" type="password" placeholder="Password" />
+      <input id="nicknameInput" placeholder="Nickname" />
+      <button id="registerBtn">Register</button>
+      <button onclick="hideRegister()">Back</button>
+    </div>
+  </div>
+
+  <div><strong>Current Room:</strong> <span id="currentRoom">None</span></div>
+  <form id="roomForm">
+    <input id="roomInput" placeholder="Room name" required />
+    <button type="submit">Join</button>
+  </form>
+
+  <div id="chat"></div>
+
+  <form id="chatForm">
+    <input id="msgInput" placeholder="Message" required />
+    <button type="submit">Send</button>
+  </form>
+
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script>
+    const socket = io("https://kiwi-backend-rtwg.onrender.com", {
+      transports: ["websocket"],
+      withCredentials: true
+    });
+
+    const chat = document.getElementById("chat");
+    const currentRoomEl = document.getElementById("currentRoom");
+    const loginPopup = document.getElementById("loginPopup");
+    const registerPopup = document.getElementById("registerPopup");
+
+    function showRegister() {
+      loginPopup.classList.add("hidden");
+      registerPopup.classList.remove("hidden");
+    }
+
+    function hideRegister() {
+      registerPopup.classList.add("hidden");
+      loginPopup.classList.remove("hidden");
+    }
+
+    document.getElementById("loginBtn").onclick = async () => {
+      const username = document.getElementById("usernameInput").value.trim();
+      const password = document.getElementById("passwordInput").value.trim();
+      if (!username || !password) return alert("Missing fields.");
+
+      try {
+        const res = await fetch("https://kiwi-backend-rtwg.onrender.com/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ username, password })
+        });
+        if (!res.ok) return alert("Invalid login.");
+        const data = await res.json();
+        loginPopup.style.display = "none";
+        socket.emit("authenticate", username, data.nickname);
+      } catch {
+        alert("Network error.");
+      }
+    };
+
+    document.getElementById("registerBtn").onclick = async () => {
+      const username = document.getElementById("newUsername").value.trim();
+      const password = document.getElementById("newPassword").value.trim();
+      const nickname = document.getElementById("nicknameInput").value.trim();
+      if (!username || !password || !nickname) return alert("Missing fields.");
+
+      try {
+        const res = await fetch("https://kiwi-backend-rtwg.onrender.com/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ username, password, nickname })
+        });
+        if (!res.ok) return alert("Registration failed.");
+        registerPopup.style.display = "none";
+      } catch {
+        alert("Network error.");
+      }
+    };
+
+    document.getElementById("roomForm").onsubmit = e => {
+      e.preventDefault();
+      const room = document.getElementById("roomInput").value.trim();
+      if (room) {
+        socket.emit("joinRoom", room);
+        currentRoomEl.textContent = room;
+        chat.innerHTML = "";
+      }
+    };
+
+    document.getElementById("chatForm").onsubmit = e => {
+      e.preventDefault();
+      const msg = document.getElementById("msgInput").value.trim();
+      if (msg) {
+        socket.emit("message", msg);
+        document.getElementById("msgInput").value = "";
+      }
+    };
+
+    socket.on("message", (msg) => {
+      const div = document.createElement("div");
+      div.textContent = msg;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    });
+  </script>
+</body>
+</html>
